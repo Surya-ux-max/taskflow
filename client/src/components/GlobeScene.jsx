@@ -1,6 +1,8 @@
 import React, { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { EffectComposer, Bloom, ChromaticAberration } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/drei';
+import { ChromaticAberration } from '@react-three/postprocessing';
+import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
 
 const WireframeGlobe = () => {
@@ -172,7 +174,10 @@ const GlobeScene = () => {
         <WireframeGlobe />
         <EffectComposer>
           <Bloom luminanceThreshold={0.2} luminanceSmoothing={0.9} intensity={1.2} />
-          <ChromaticAberration offset={[0.001, 0.001]} />
+          <ChromaticAberration
+            blendFunction={BlendFunction.NORMAL}
+            offset={[0.001, 0.001]}
+          />
         </EffectComposer>
       </Canvas>
     </div>
