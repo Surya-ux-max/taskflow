@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { CheckCircle2, Zap, Users, BarChart3, Clock, Rocket } from 'lucide-react';
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const Landing = () => {
   const cards = [
@@ -44,9 +45,9 @@ const Landing = () => {
             <a href="#" className="text-sm font-medium text-gray-600 hover:text-red-600 transition-colors">Product</a>
             <a href="#" className="text-sm font-medium text-gray-600 hover:text-red-600 transition-colors">Features</a>
             <a href="#" className="text-sm font-medium text-gray-600 hover:text-red-600 transition-colors">Pricing</a>
-            <button className="px-5 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-full hover:bg-red-700 transition-all hover:shadow-lg hover:shadow-red-500/30 transform hover:-translate-y-0.5 active:scale-95">
+            <Link to="/login" className="px-5 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-full hover:bg-red-700 transition-all hover:shadow-lg hover:shadow-red-500/30 transform hover:-translate-y-0.5 active:scale-95 inline-block">
               Get Started
-            </button>
+            </Link>
           </div>
         </div>
       </nav>
@@ -95,9 +96,9 @@ const Landing = () => {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <button className="w-full sm:w-auto px-8 py-4 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all shadow-xl shadow-red-500/25 hover:-translate-y-1 transform active:scale-95">
+            <Link to="/login" className="w-full sm:w-auto px-8 py-4 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all shadow-xl shadow-red-500/25 hover:-translate-y-1 transform active:scale-95 text-center inline-block">
               Start Your Free Trial
-            </button>
+            </Link>
             <button className="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 font-bold rounded-2xl border border-gray-200 hover:bg-gray-50 transition-all hover:-translate-y-1 transform active:scale-95">
               Watch Demo
             </button>
@@ -150,9 +151,9 @@ const Landing = () => {
           <p className="text-red-100 text-lg mb-12 max-w-xl mx-auto">
             Join thousands of professionals who have already optimized their life with TaskFlow - Survex.
           </p>
-          <button className="px-12 py-5 bg-white text-red-600 font-bold rounded-2xl shadow-2xl shadow-red-950/20 hover:bg-gray-50 transition-all hover:scale-105 active:scale-95">
+          <Link to="/login" className="px-12 py-5 bg-white text-red-600 font-bold rounded-2xl shadow-2xl shadow-red-950/20 hover:bg-gray-50 transition-all hover:scale-105 active:scale-95 inline-block">
             Get Started Now
-          </button>
+          </Link>
         </div>
       </section>
 

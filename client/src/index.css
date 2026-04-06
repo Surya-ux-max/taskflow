@@ -15,13 +15,29 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-white text-gray-900 antialiased;
+  }
+
+  /* Ensure 3D transforms render correctly across the app */
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @layer components {
   .glass-card {
     @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl rounded-2xl;
+  }
+
+  /* Page turn perspective container */
+  .perspective-container {
+    perspective: 1200px;
+    perspective-origin: center top;
   }
 }
