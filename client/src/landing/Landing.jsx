@@ -2,6 +2,9 @@ import { motion } from 'framer-motion';
 import { CheckCircle2, Zap, Users, BarChart3, Clock, Rocket } from 'lucide-react';
 import React from 'react';
 import { Link } from 'react-router-dom';
+import HeroParticles from '../components/HeroParticles';
+import GeometryScene from '../components/GeometryScene';
+import GlobeScene from '../components/GlobeScene';
 
 const Landing = () => {
   const cards = [
@@ -54,7 +57,10 @@ const Landing = () => {
 
       {/* Hero Section */}
       <main className="pt-32 pb-20 relative">
-        <div className="max-w-7xl mx-auto px-6 text-center">
+        {/* Three.js Particle Background */}
+        <HeroParticles />
+        
+        <div className="max-w-7xl mx-auto px-6 text-center relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -143,8 +149,16 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Three.js Geometry Divider */}
+      <section className="bg-gradient-to-b from-white to-gray-50 py-12 overflow-hidden">
+        <GeometryScene />
+      </section>
+
       {/* CTA Section */}
       <section className="py-24 bg-red-600 relative overflow-hidden">
+        {/* Three.js Globe Background */}
+        <GlobeScene />
+        
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.2),transparent)]"></div>
         <div className="max-w-7xl mx-auto px-6 relative z-10 text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-8">Ready to elevate your flow?</h2>
