@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, FolderKanban, Users, X, Menu } from 'lucide-react';
+import { Search, Bell, FolderKanban, Users, X, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useProjects } from '../context/ProjectContext';
 
-const Topbar = ({ onMenuClick }) => {
+const Topbar = ({ onMenuClick, collapsed, onToggleCollapse }) => {
   const { user } = useAuth();
   const { projects, members } = useProjects();
   const navigate = useNavigate();
@@ -58,6 +58,19 @@ const Topbar = ({ onMenuClick }) => {
       >
         <Menu className="w-5 h-5" />
       </button>
+
+      {/* Desktop sidebar toggle */}
+      <motion.button
+        onClick={onToggleCollapse}
+        whileHover={{ scale: 1.08 }}
+        whileTap={{ scale: 0.93 }}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        className="hidden md:flex items-center justify-center w-8 h-8 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors mr-2 shrink-0"
+      >
+        {collapsed
+          ? <PanelLeftOpen className="w-4 h-4" />
+          : <PanelLeftClose className="w-4 h-4" />}
+      </motion.button>
 
       {/* Search */}
       <div ref={wrapperRef} className="flex-1 max-w-lg relative">

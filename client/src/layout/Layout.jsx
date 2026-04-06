@@ -8,13 +8,14 @@ import PageTransition from '../components/PageTransition';
 const Layout = () => {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-gray-50 flex overflow-hidden font-sans">
 
       {/* Desktop sidebar */}
       <div className="hidden md:block">
-        <Sidebar />
+        <Sidebar collapsed={collapsed} />
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -35,14 +36,18 @@ const Layout = () => {
               transition={{ type: 'spring', stiffness: 380, damping: 32 }}
               className="fixed left-0 top-0 bottom-0 z-50 md:hidden"
             >
-              <Sidebar onClose={() => setMobileOpen(false)} />
+              <Sidebar collapsed={false} onClose={() => setMobileOpen(false)} />
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
       <div className="flex-1 flex flex-col overflow-hidden relative min-w-0">
-        <Topbar onMenuClick={() => setMobileOpen(true)} />
+        <Topbar
+          onMenuClick={() => setMobileOpen(true)}
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed(p => !p)}
+        />
         <main
           className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#fafafa]"
           style={{ perspective: 1200 }}

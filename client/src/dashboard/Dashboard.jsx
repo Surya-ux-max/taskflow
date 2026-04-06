@@ -1,371 +1,222 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, useMotionValue, useSpring, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import {
   FolderKanban, CheckCircle2, Clock, Plus, Calendar, ArrowRight,
-  BarChart3, TrendingUp, Users, Activity, Megaphone, X, Circle,
-  Flame, ExternalLink,
+  TrendingUp, Users, Activity, Flame, ArrowUpRight, Sparkles,
+  Target, Zap, MoreHorizontal, ChevronRight
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useProjects } from '../context/ProjectContext';
 import CreateProjectModal from '../components/CreateProjectModal';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+const cn = (...c) => c.filter(Boolean).join(' ');
 
-const useCountUp = (target, duration = 1000) => {
-  const [value, setValue] = useState(0);
+/* ── Count-up ── */
+const useCountUp = (target, duration = 1200) => {
+  const [v, setV] = useState(0);
   useEffect(() => {
-    let start = 0;
-    const step = target / (duration / 16);
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= target) { setValue(target); clearInterval(timer); }
-      else setValue(Math.floor(start));
-    }, 16);
-    return () => clearInterval(timer);
+    let s = 0; const step = target / (duration / 16);
+    const t = setInterval(() => { s += step; if (s >= target) { setV(target); clearInterval(t); } else setV(Math.floor(s)); }, 16);
+    return () => clearInterval(t);
   }, [target, duration]);
-  return value;
+  return v;
 };
 
-const MagneticButton = ({ onClick, children, className }) => {
-  const ref = useRef(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const sx = useSpring(x, { stiffness: 300, damping: 20 });
-  const sy = useSpring(y, { stiffness: 300, damping: 20 });
+/* ── Sparkline SVG ── */
+const Sparkline = ({ data, color = '#ef4444', height = 40 }) => {
+  const max = Math.max(...data); const min = Math.min(...data);
+  const w = 100; const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = height - ((v - min) / (max - min || 1)) * (height - 6) - 3;
+    return `${x},${y}`;
+  }).join(' ');
   return (
-    <motion.button ref={ref} style={{ x: sx, y: sy }}
-      onMouseMove={e => { const r = ref.current.getBoundingClientRect(); x.set((e.clientX - r.left - r.width / 2) * 0.35); y.set((e.clientY - r.top - r.height / 2) * 0.35); }}
-      onMouseLeave={() => { x.set(0); y.set(0); }}
-      onClick={onClick} className={className}>
-      {children}
-    </motion.button>
+    <svg viewBox={`0 0 ${w} ${height}`} className="w-full" preserveAspectRatio="none">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points={`0,${height} ${pts} ${w},${height}`} fill={color} fillOpacity="0.08" stroke="none" />
+    </svg>
   );
 };
 
-const statusStyles = {
-  Completed:   'bg-emerald-50 text-emerald-700',
-  'In Progress':'bg-blue-50 text-blue-700',
-  'At Risk':   'bg-orange-50 text-orange-700',
-  Planning:    'bg-gray-100 text-gray-700',
-};
-
-const barColor = (proj) =>
-  proj.progress === 100 ? 'bg-emerald-500' :
-  proj.status === 'At Risk' ? 'bg-orange-500' : 'bg-red-500';
-
-// ── Recently visited (localStorage) ─────────────────────────────────────────
-
-const RECENT_KEY = 'tf_recent_pages';
-
-export const recordVisit = (path, label, icon) => {
-  try {
-    const stored = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
-    const filtered = stored.filter(r => r.path !== path);
-    const updated = [{ path, label, icon, ts: Date.now() }, ...filtered].slice(0, 5);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
-  } catch { /* ignore */ }
-};
-
-const useRecentPages = () => {
-  const [recent, setRecent] = useState([]);
-  useEffect(() => {
-    try { setRecent(JSON.parse(localStorage.getItem(RECENT_KEY) || '[]')); } catch { setRecent([]); }
-  }, []);
-  return recent;
-};
-
-// ── Mini analytics (inline) ──────────────────────────────────────────────────
-
-const chartData = [
-  { day: 'Mon', completed: 65, pending: 35 },
-  { day: 'Tue', completed: 80, pending: 45 },
-  { day: 'Wed', completed: 40, pending: 60 },
-  { day: 'Thu', completed: 95, pending: 20 },
-  { day: 'Fri', completed: 70, pending: 50 },
-  { day: 'Sat', completed: 30, pending: 20 },
-  { day: 'Sun', completed: 45, pending: 15 },
-];
-
-const MiniAnalytics = () => (
-  <motion.div
-    initial={{ opacity: 0, y: 24 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: 0.5, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-    className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
-  >
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-red-600" /> Weekly Task Velocity
-        </h2>
-        <p className="text-xs text-gray-500 mt-0.5">Completed vs pending — last 7 days</p>
-      </div>
-      <Link to="/analytics" className="flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 transition-colors">
-        Full Analytics <ExternalLink className="w-3 h-3" />
-      </Link>
-    </div>
-
-    {/* Metric chips */}
-    <div className="grid grid-cols-3 gap-3 mb-6">
-      {[
-        { icon: <TrendingUp className="w-4 h-4 text-emerald-600" />, label: 'Completion', value: '84.2%', badge: '+14.5%', badgeColor: 'text-emerald-600 bg-emerald-50' },
-        { icon: <Activity className="w-4 h-4 text-blue-600" />,     label: 'Ratio',      value: '1:4.5',  badge: '-2.1%',  badgeColor: 'text-red-600 bg-red-50' },
-        { icon: <Users className="w-4 h-4 text-purple-600" />,      label: 'Efficiency', value: 'A-',     badge: '+8.4%',  badgeColor: 'text-emerald-600 bg-emerald-50' },
-      ].map((m, i) => (
-        <motion.div key={m.label}
-          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.55 + i * 0.07, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="bg-gray-50 rounded-xl p-3 flex flex-col gap-1.5"
-        >
-          <div className="flex items-center justify-between">
-            {m.icon}
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${m.badgeColor}`}>{m.badge}</span>
-          </div>
-          <div className="text-lg font-bold text-gray-900">{m.value}</div>
-          <div className="text-xs text-gray-500 font-medium">{m.label}</div>
-        </motion.div>
-      ))}
-    </div>
-
-    {/* Bar chart */}
-    <div className="flex items-end justify-between h-28 gap-1.5">
-      {chartData.map((d, idx) => (
-        <div key={d.day} className="flex flex-col items-center flex-1 group">
-          <div className="w-full flex justify-center items-end gap-0.5 h-20 bg-gray-50/60 rounded-lg p-0.5 group-hover:bg-gray-100/60 transition-colors">
-            <div className="w-full max-w-[10px] bg-emerald-100 rounded flex flex-col justify-end overflow-hidden">
-              <motion.div initial={{ height: 0 }} animate={{ height: `${d.completed}%` }}
-                transition={{ duration: 0.9, ease: 'easeOut', delay: 0.6 + idx * 0.06 }}
-                className="w-full bg-emerald-500 rounded group-hover:shadow-[0_0_8px_rgba(16,185,129,0.4)] transition-shadow" />
-            </div>
-            <div className="w-full max-w-[10px] bg-gray-100 rounded flex flex-col justify-end overflow-hidden">
-              <motion.div initial={{ height: 0 }} animate={{ height: `${d.pending}%` }}
-                transition={{ duration: 0.9, ease: 'easeOut', delay: 0.72 + idx * 0.06 }}
-                className="w-full bg-gray-300 rounded" />
-            </div>
-          </div>
-          <span className="text-[10px] font-semibold text-gray-400 mt-1.5">{d.day}</span>
-        </div>
-      ))}
-    </div>
-  </motion.div>
-);
-
-// ── Stat card ────────────────────────────────────────────────────────────────
-
-const StatCard = ({ stat, idx }) => {
-  const count = useCountUp(stat.value, 900 + idx * 150);
+/* ── Radial progress ── */
+const RadialProgress = ({ pct, size = 64, stroke = 5, color = '#ef4444' }) => {
+  const r = (size - stroke * 2) / 2;
+  const circ = 2 * Math.PI * r;
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: idx * 0.08, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow"
-    >
-      <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{stat.title}</p>
-        <h3 className="text-3xl font-bold text-gray-900 mt-1.5 tabular-nums">{count}</h3>
-      </div>
-      <motion.div whileHover={{ scale: 1.15, rotate: 5 }} transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-        className={`w-11 h-11 ${stat.bg} rounded-xl flex items-center justify-center`}>
-        {stat.icon}
-      </motion.div>
-    </motion.div>
+    <svg width={size} height={size} className="-rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f3f4f6" strokeWidth={stroke} />
+      <motion.circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeLinecap="round" strokeDasharray={circ}
+        initial={{ strokeDashoffset: circ }}
+        animate={{ strokeDashoffset: circ - (pct / 100) * circ }}
+        transition={{ duration: 1.2, ease: 'easeOut', delay: 0.3 }} />
+    </svg>
   );
 };
 
-// ── Project card ─────────────────────────────────────────────────────────────
-
-const ProjectCard = ({ proj, idx }) => (
-  <motion.div
-    initial={{ opacity: 0, rotateX: 90, transformOrigin: 'top center' }}
-    animate={{ opacity: 1, rotateX: 0, transformOrigin: 'top center' }}
-    transition={{ delay: 0.2 + idx * 0.07, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-    style={{ perspective: 800 }}
-    whileHover={{ y: -3, boxShadow: '0 16px 32px -8px rgba(0,0,0,0.09)' }}
-    className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm group"
-  >
-    <div className="flex items-start justify-between mb-3">
-      <div className="flex items-center gap-2.5">
-        <div className={`w-2.5 h-2.5 rounded-full ${proj.color} shrink-0 mt-0.5`} />
-        <div>
-          <h3 className="text-sm font-bold text-gray-900 group-hover:text-red-600 transition-colors leading-tight">
-            <Link to={`/project/${proj.id}`}>{proj.name}</Link>
-          </h3>
-          <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{proj.desc}</p>
-        </div>
-      </div>
-      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ml-2 ${statusStyles[proj.status] || 'bg-gray-100 text-gray-700'}`}>
-        {proj.status}
-      </span>
-    </div>
-
-    <div className="mb-3">
-      <div className="flex justify-between text-[10px] font-semibold text-gray-400 mb-1.5">
-        <span>Progress</span><span>{proj.progress}%</span>
-      </div>
-      <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-        <motion.div initial={{ width: 0 }} animate={{ width: `${proj.progress}%` }}
-          transition={{ duration: 1, ease: 'easeOut', delay: 0.35 + idx * 0.07 }}
-          className={`h-full rounded-full ${barColor(proj)} relative`}>
-          <motion.div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
-            initial={{ x: '-100%' }} animate={{ x: '200%' }}
-            transition={{ duration: 0.7, ease: 'easeInOut', delay: 1.2 + idx * 0.07 }} />
-        </motion.div>
-      </div>
-    </div>
-
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium">
-        <Calendar className="w-3 h-3" /> Due {proj.deadline}
-      </div>
-      <Link to={`/project/${proj.id}`}
-        className="flex items-center gap-1 text-[10px] font-bold text-red-600 hover:text-red-700 transition-colors">
-        Open <ArrowRight className="w-3 h-3" />
-      </Link>
-    </div>
-  </motion.div>
-);
-
-// ── My Tasks Today ────────────────────────────────────────────────────────────
+const weekData = [28, 45, 38, 60, 52, 70, 65];
+const priorityDot = { High: 'bg-red-500', Medium: 'bg-amber-400', Low: 'bg-emerald-500' };
 
 const MY_TASKS = [
-  { id: 101, title: 'Design System Update',   project: 'Apollo Redesign',   priority: 'High',   done: false },
-  { id: 103, title: 'Implement JWT Auth',      project: 'Apollo Redesign',   priority: 'High',   done: false },
-  { id: 303, title: 'Push Notifications',      project: 'Mobile App V2',     priority: 'Medium', done: false },
-  { id: 201, title: 'Content Strategy Doc',    project: 'Marketing Website', priority: 'High',   done: true  },
+  { id: 101, title: 'Design System Update',  project: 'Apollo Redesign',   priority: 'High',   done: false },
+  { id: 103, title: 'Implement JWT Auth',     project: 'Apollo Redesign',   priority: 'High',   done: false },
+  { id: 303, title: 'Push Notifications',     project: 'Mobile App V2',     priority: 'Medium', done: false },
+  { id: 201, title: 'Content Strategy Doc',   project: 'Marketing Website', priority: 'High',   done: true  },
 ];
 
-const priorityDot = { High: 'bg-red-500', Medium: 'bg-orange-400', Low: 'bg-emerald-500' };
+const statusColor = {
+  Completed:    { bg: 'bg-emerald-500/10', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+  'In Progress':{ bg: 'bg-blue-500/10',    text: 'text-blue-600',    dot: 'bg-blue-500'    },
+  'At Risk':    { bg: 'bg-orange-500/10',  text: 'text-orange-600',  dot: 'bg-orange-500'  },
+  Planning:     { bg: 'bg-gray-200',       text: 'text-gray-600',    dot: 'bg-gray-400'    },
+};
 
-const MyTasksToday = () => {
-  const [tasks, setTasks] = useState(MY_TASKS);
-  const toggle = (id) => setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
-  const done = tasks.filter(t => t.done).length;
+const barColor = p =>
+  p.progress === 100 ? 'bg-emerald-500' : p.status === 'At Risk' ? 'bg-orange-500' : 'bg-red-500';
 
+/* ════════════════════════════════════════════════════════════
+   STAT CARD
+════════════════════════════════════════════════════════════ */
+const StatCard = ({ title, value, icon: Icon, iconColor, bg, trend, sparkData, idx }) => {
+  const count = useCountUp(value, 1000 + idx * 100);
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: idx * 0.07, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="relative bg-white rounded-2xl border border-gray-100 shadow-sm p-5 overflow-hidden group hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
     >
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-            <Flame className="w-4 h-4 text-orange-500" /> My Tasks Today
-          </h2>
-          <p className="text-xs text-gray-400 mt-0.5">{done}/{tasks.length} completed</p>
+      {/* bg glow */}
+      <div className={cn('absolute -top-6 -right-6 w-24 h-24 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity', bg)} />
+
+      <div className="flex items-start justify-between mb-3">
+        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', bg)}>
+          <Icon className={cn('w-5 h-5', iconColor)} />
         </div>
-        <div className="w-20 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-          <motion.div animate={{ width: `${(done / tasks.length) * 100}%` }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
-            className="h-full bg-orange-400 rounded-full" />
+        {trend && (
+          <span className="flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+            <TrendingUp className="w-3 h-3" />{trend}
+          </span>
+        )}
+      </div>
+
+      <div className="text-3xl font-black text-gray-900 tabular-nums mb-0.5">{count}</div>
+      <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</div>
+
+      {sparkData && (
+        <div className="mt-3 h-10 opacity-60 group-hover:opacity-100 transition-opacity">
+          <Sparkline data={sparkData} color={iconColor.includes('blue') ? '#3b82f6' : iconColor.includes('emerald') ? '#10b981' : iconColor.includes('orange') ? '#f97316' : '#a855f7'} />
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+/* ════════════════════════════════════════════════════════════
+   PROJECT ROW
+════════════════════════════════════════════════════════════ */
+const ProjectRow = ({ proj, idx }) => {
+  const sc = statusColor[proj.status] || statusColor.Planning;
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: 0.2 + idx * 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      className="group flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+    >
+      <div className={cn('w-2 h-10 rounded-full shrink-0', proj.color)} />
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <Link to={`/project/${proj.id}`} className="text-sm font-bold text-gray-900 group-hover:text-red-600 transition-colors truncate">
+            {proj.name}
+          </Link>
+          <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0', sc.bg, sc.text)}>
+            {proj.status}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+            <motion.div initial={{ width: 0 }} animate={{ width: `${proj.progress}%` }}
+              transition={{ duration: 1, ease: 'easeOut', delay: 0.4 + idx * 0.06 }}
+              className={cn('h-full rounded-full', barColor(proj))} />
+          </div>
+          <span className="text-[11px] font-bold text-gray-400 shrink-0 w-8 text-right">{proj.progress}%</span>
         </div>
       </div>
 
-      <div className="space-y-2">
-        {tasks.map((task, idx) => (
-          <motion.div key={task.id} layout
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.35 + idx * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-            className={`flex items-center gap-3 p-3 rounded-xl transition-colors cursor-pointer group ${task.done ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
-            onClick={() => toggle(task.id)}
-          >
-            <motion.div whileTap={{ scale: 0.85 }} transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${task.done ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 group-hover:border-red-400'}`}>
-              {task.done && <Check className="w-3 h-3 text-white" />}
-            </motion.div>
-            <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold truncate transition-colors ${task.done ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                {task.title}
-              </p>
-              <p className="text-xs text-gray-400 truncate">{task.project}</p>
-            </div>
-            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot[task.priority]}`} />
-          </motion.div>
-        ))}
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-[11px] text-gray-400 font-medium hidden sm:block">{proj.tasks.length} tasks</span>
+        <Link to={`/project/${proj.id}`}
+          className="w-7 h-7 rounded-lg bg-gray-100 group-hover:bg-red-600 flex items-center justify-center transition-colors">
+          <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-white transition-colors" />
+        </Link>
       </div>
     </motion.div>
   );
 };
 
-// need Check icon locally
-const Check = ({ className }) => (
-  <svg className={className} viewBox="0 0 12 12" fill="none">
-    <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-// ── Community Banner ──────────────────────────────────────────────────────────
-
-const CommunityBanner = () => {
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem('tf_banner_dismissed') === '1');
-
-  const dismiss = () => { localStorage.setItem('tf_banner_dismissed', '1'); setDismissed(true); };
-
+/* ════════════════════════════════════════════════════════════
+   ACTIVITY FEED
+════════════════════════════════════════════════════════════ */
+const ActivityFeed = ({ projects }) => {
+  const { getMember } = useProjects();
+  const all = projects.flatMap(p => p.activity.map(a => ({ ...a, projectName: p.name }))).slice(-6).reverse();
   return (
-    <AnimatePresence>
-      {!dismissed && (
-        <motion.div
-          initial={{ opacity: 0, y: -12, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, height: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 p-5 border border-gray-700"
-        >
-          {/* animated glow */}
-          <motion.div
-            className="absolute top-0 left-1/4 w-64 h-64 bg-red-600/20 rounded-full blur-3xl pointer-events-none"
-            animate={{ x: [0, 40, 0], opacity: [0.3, 0.6, 0.3] }}
-            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-          />
-          <motion.div
-            className="absolute bottom-0 right-1/4 w-48 h-48 bg-orange-500/15 rounded-full blur-3xl pointer-events-none"
-            animate={{ x: [0, -30, 0], opacity: [0.2, 0.5, 0.2] }}
-            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-          />
-
-          <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-red-600/20 rounded-xl border border-red-500/30 shrink-0">
-                <Megaphone className="w-5 h-5 text-red-400" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Announcement</span>
-                  <span className="text-[10px] font-bold bg-red-600/30 text-red-300 px-2 py-0.5 rounded-full border border-red-500/30">New</span>
-                </div>
-                <h3 className="text-sm font-bold text-white">Survex × TaskFlow Community is launching</h3>
-                <p className="text-xs text-gray-400 mt-0.5 max-w-md">
-                  Connect with other teams, share workflows, and get early access to upcoming features. Join the waitlist now.
-                </p>
-              </div>
+    <div className="space-y-3">
+      {all.map((a, i) => {
+        const m = getMember(a.userId);
+        return (
+          <motion.div key={a.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 + i * 0.05 }}
+            className="flex items-start gap-3">
+            <img src={`https://i.pravatar.cc/100?img=${m?.avatar || 10}`} alt={m?.name}
+              className="w-7 h-7 rounded-full border-2 border-white shadow-sm shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-700 leading-relaxed">
+                <span className="font-bold">{m?.name}</span> {a.action}
+              </p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{a.projectName} · {a.time}</p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <motion.button whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors shadow-lg shadow-red-900/30">
-                Join Waitlist
-              </motion.button>
-              <button onClick={dismiss} className="p-1.5 text-gray-500 hover:text-gray-300 hover:bg-white/10 rounded-lg transition-colors">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          </motion.div>
+        );
+      })}
+    </div>
   );
 };
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
+/* ════════════════════════════════════════════════════════════
+   WEEKLY BAR CHART
+════════════════════════════════════════════════════════════ */
+const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const completed = [5, 8, 4, 11, 7, 3, 6];
+const pending   = [3, 4, 6, 2, 5, 2, 3];
 
+const WeeklyChart = () => (
+  <div className="flex items-end gap-2 h-28">
+    {days.map((d, i) => (
+      <div key={i} className="flex-1 flex flex-col items-center gap-1">
+        <div className="w-full flex flex-col gap-0.5 items-center">
+          <motion.div initial={{ height: 0 }} animate={{ height: `${completed[i] * 7}px` }}
+            transition={{ duration: 0.8, ease: 'easeOut', delay: 0.4 + i * 0.06 }}
+            className="w-full rounded-t-md bg-red-500 min-h-[4px]" />
+          <motion.div initial={{ height: 0 }} animate={{ height: `${pending[i] * 7}px` }}
+            transition={{ duration: 0.8, ease: 'easeOut', delay: 0.5 + i * 0.06 }}
+            className="w-full rounded-b-md bg-gray-200 min-h-[4px]" />
+        </div>
+        <span className="text-[10px] font-semibold text-gray-400">{d}</span>
+      </div>
+    ))}
+  </div>
+);
+
+/* ════════════════════════════════════════════════════════════
+   DASHBOARD
+════════════════════════════════════════════════════════════ */
 const Dashboard = () => {
   const { user } = useAuth();
   const { projects } = useProjects();
   const [modalOpen, setModalOpen] = useState(false);
-  const recent = useRecentPages();
+  const [tasks, setTasks] = useState(MY_TASKS);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -374,105 +225,194 @@ const Dashboard = () => {
   const totalTasks   = projects.reduce((s, p) => s + p.tasks.length, 0);
   const doneTasks    = projects.reduce((s, p) => s + p.tasks.filter(t => t.column === 'done').length, 0);
   const pendingTasks = totalTasks - doneTasks;
+  const doneCount    = tasks.filter(t => t.done).length;
+  const completionPct = Math.round((doneTasks / (totalTasks || 1)) * 100);
 
   const stats = [
-    { title: 'Total Projects',   value: projects.length, icon: <FolderKanban className="w-5 h-5 text-blue-500" />,    bg: 'bg-blue-50' },
-    { title: 'Tasks Completed',  value: doneTasks,        icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />, bg: 'bg-emerald-50' },
-    { title: 'Pending Tasks',    value: pendingTasks,     icon: <Clock className="w-5 h-5 text-orange-500" />,         bg: 'bg-orange-50' },
-    { title: 'Active Members',   value: 7,                icon: <Users className="w-5 h-5 text-purple-500" />,         bg: 'bg-purple-50' },
+    { title: 'Projects',        value: projects.length, icon: FolderKanban, iconColor: 'text-blue-600',    bg: 'bg-blue-100',    trend: '+2',   sparkData: [2,3,2,4,3,4,4] },
+    { title: 'Tasks Done',      value: doneTasks,        icon: CheckCircle2, iconColor: 'text-emerald-600', bg: 'bg-emerald-100', trend: '+12%', sparkData: [4,6,5,8,7,9,doneTasks] },
+    { title: 'Pending',         value: pendingTasks,     icon: Clock,        iconColor: 'text-orange-600',  bg: 'bg-orange-100',  trend: null,   sparkData: [8,6,9,5,7,6,pendingTasks] },
+    { title: 'Team Members',    value: 7,                icon: Users,        iconColor: 'text-purple-600',  bg: 'bg-purple-100',  trend: null,   sparkData: [5,5,6,6,7,7,7] },
   ];
-
-  const recentIcons = { project: FolderKanban, team: Users, analytics: BarChart3 };
 
   return (
     <div className="space-y-6">
 
-      {/* ── Zone A: Greeting ── */}
-      <motion.div
-        initial={{ opacity: 0, y: -14 }}
-        animate={{ opacity: 1, y: 0 }}
+      {/* ── Header ── */}
+      <motion.div initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
-      >
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            {greeting}, {firstName} 👋
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">{greeting}</span>
+          </div>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight">{firstName} 👋</h1>
+          <p className="text-gray-400 text-sm mt-0.5">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <MagneticButton onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">
+        <motion.button whileHover={{ scale: 1.03, y: -1 }} whileTap={{ scale: 0.97 }}
+          onClick={() => setModalOpen(true)}
+          className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-500/25">
           <Plus className="w-4 h-4" /> New Project
-        </MagneticButton>
+        </motion.button>
       </motion.div>
-
-      {/* ── Zone B: Community Banner ── */}
-      <CommunityBanner />
 
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((s, i) => <StatCard key={s.title} stat={s} idx={i} />)}
+        {stats.map((s, i) => <StatCard key={s.title} {...s} idx={i} />)}
       </div>
 
-      {/* ── Recently Visited ── */}
-      {recent.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">Jump back in</h2>
-          <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-            {recent.map((r, i) => {
-              const Icon = recentIcons[r.icon] || FolderKanban;
-              return (
-                <motion.div key={r.path}
-                  initial={{ opacity: 0, x: -16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.2 + i * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <Link to={r.path}
-                    className="flex items-center gap-2.5 px-4 py-2.5 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-red-200 transition-all whitespace-nowrap group">
-                    <Icon className="w-4 h-4 text-gray-400 group-hover:text-red-500 transition-colors" />
-                    <span className="text-sm font-semibold text-gray-700 group-hover:text-gray-900">{r.label}</span>
-                    <span className="text-[10px] text-gray-400">{new Date(r.ts).toLocaleDateString()}</span>
-                  </Link>
-                </motion.div>
-              );
-            })}
-          </div>
-        </motion.div>
-      )}
+      {/* ── Bento Grid ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-      {/* ── Zone C: Two-col — Projects + My Tasks ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Projects list — 2/3 width */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-gray-900">Active Projects</h2>
-            <Link to="/projects" className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1">
-              View all <ArrowRight className="w-3 h-3" />
+        {/* Active Projects — 2 cols */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-black text-gray-900">Active Projects</h2>
+              <p className="text-xs text-gray-400 mt-0.5">{projects.filter(p => p.status !== 'Completed').length} in progress</p>
+            </div>
+            <Link to="/projects" className="flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700 transition-colors">
+              View all <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <AnimatePresence>
-              {projects.slice(0, 4).map((proj, idx) => (
-                <ProjectCard key={proj.id} proj={proj} idx={idx} />
-              ))}
-            </AnimatePresence>
+          <div className="space-y-1">
+            {projects.slice(0, 4).map((p, i) => <ProjectRow key={p.id} proj={p} idx={i} />)}
           </div>
-        </div>
+        </motion.div>
 
-        {/* My Tasks — 1/3 width */}
-        <div>
-          <MyTasksToday />
-        </div>
+        {/* Completion Ring */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.28, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-black text-gray-900">Overall Progress</h2>
+            <Target className="w-4 h-4 text-gray-300" />
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center gap-4">
+            <div className="relative">
+              <RadialProgress pct={completionPct} size={120} stroke={8} color="#ef4444" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-black text-gray-900">{completionPct}%</span>
+                <span className="text-[10px] font-semibold text-gray-400">done</span>
+              </div>
+            </div>
+            <div className="w-full grid grid-cols-2 gap-3">
+              {[
+                { label: 'Completed', value: doneTasks,    color: 'bg-red-500' },
+                { label: 'Pending',   value: pendingTasks, color: 'bg-gray-200' },
+              ].map(item => (
+                <div key={item.label} className="bg-gray-50 rounded-xl p-3 text-center">
+                  <div className={cn('w-2 h-2 rounded-full mx-auto mb-1', item.color)} />
+                  <div className="text-lg font-black text-gray-900">{item.value}</div>
+                  <div className="text-[10px] font-semibold text-gray-400">{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
       </div>
 
-      {/* ── Zone D: Mini Analytics (bottom) ── */}
-      <MiniAnalytics />
+      {/* ── Bottom Row ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        {/* My Tasks */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.32, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+                <Flame className="w-4 h-4 text-orange-500" /> My Tasks
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">{doneCount}/{tasks.length} completed today</p>
+            </div>
+            <div className="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+              <motion.div animate={{ width: `${(doneCount / tasks.length) * 100}%` }}
+                transition={{ duration: 0.5 }} className="h-full bg-orange-400 rounded-full" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {tasks.map((task, i) => (
+              <motion.div key={task.id} layout
+                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.35 + i * 0.05 }}
+                onClick={() => setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: !t.done } : t))}
+                className={cn('flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-colors', task.done ? 'bg-gray-50' : 'hover:bg-gray-50')}
+              >
+                <motion.div whileTap={{ scale: 0.8 }}
+                  className={cn('w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors',
+                    task.done ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 hover:border-red-400')}>
+                  {task.done && (
+                    <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </motion.div>
+                <div className="flex-1 min-w-0">
+                  <p className={cn('text-sm font-semibold truncate', task.done ? 'line-through text-gray-400' : 'text-gray-800')}>{task.title}</p>
+                  <p className="text-[10px] text-gray-400 truncate">{task.project}</p>
+                </div>
+                <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', priorityDot[task.priority])} />
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Weekly Chart */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.38, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-base font-black text-gray-900">Weekly Velocity</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Tasks completed vs pending</p>
+            </div>
+            <Link to="/analytics" className="flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700">
+              Details <ArrowUpRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="flex items-center gap-4 mb-4">
+            {[{ color: 'bg-red-500', label: 'Done' }, { color: 'bg-gray-200', label: 'Pending' }].map(l => (
+              <div key={l.label} className="flex items-center gap-1.5">
+                <div className={cn('w-2.5 h-2.5 rounded-sm', l.color)} />
+                <span className="text-[11px] font-semibold text-gray-500">{l.label}</span>
+              </div>
+            ))}
+          </div>
+          <WeeklyChart />
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {[
+              { icon: <Zap className="w-3.5 h-3.5 text-amber-500" />, label: 'Velocity', value: '8.4/d' },
+              { icon: <Activity className="w-3.5 h-3.5 text-blue-500" />, label: 'Ratio', value: '1:4.5' },
+              { icon: <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />, label: 'Rate', value: '84%' },
+            ].map(m => (
+              <div key={m.label} className="bg-gray-50 rounded-xl p-2.5 text-center">
+                <div className="flex justify-center mb-1">{m.icon}</div>
+                <div className="text-sm font-black text-gray-900">{m.value}</div>
+                <div className="text-[10px] text-gray-400 font-semibold">{m.label}</div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Activity Feed */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.44, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-black text-gray-900">Activity</h2>
+            <button className="text-gray-300 hover:text-gray-500 transition-colors">
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+          <ActivityFeed projects={projects} />
+        </motion.div>
+      </div>
 
       <CreateProjectModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
